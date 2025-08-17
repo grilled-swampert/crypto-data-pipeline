@@ -134,3 +134,10 @@ cython_debug/
 
 # VS Code settings
 .vscode/
+
+# Airflow data and logs
+data/
+logs/
+
+# Postgres database
+pgdata/

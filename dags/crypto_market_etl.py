@@ -125,7 +125,6 @@ def extract_market_data(**context) -> str:
             'per_page': 50,
             'page': 1,
             'sparkline': False,
-            'price_change_percentage': '1h, 24h, 7d, 30d'
         }
         headers = {
             "accept": "application/json",
@@ -172,7 +171,7 @@ def load_rawdata_to_postgres(**context):
     Load raw JSON data to PostgreSQL data lake
     """
     filepath = context['task_instance'].xcom_pull(task_ids='extract_market_data')
-    execution_date = context['execution_date']
+    execution_date = context.get('data_interval_start') or context.get('logical_date')
     
     logging.info(f"Loading raw data from {filepath} to PostgreSQL")
     

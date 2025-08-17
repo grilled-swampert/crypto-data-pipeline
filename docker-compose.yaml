@@ -1,14 +1,32 @@
-version: '1'
+version: '3.8'
 services:
-  airflow:
-    image: apache/airflow:2.10.2
+  postgres:
+    image: postgres:15
     restart: always
     environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  airflow:
+    image: apache/airflow:2.10.2
+    container_name: crypto_dag-airflow-1
+    environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
-      - AIRFLOW__CORE__LOAD_EXAMPLES=True
-      - _PIP_ADDITIONAL_REQUIREMENTS=
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - CRYPTO_API_KEY=${CRYPTO_API_KEY}
+      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-postgres
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./data:/opt/airflow/data
     ports:
       - "8080:8080"
-    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com && airflow webserver & airflow scheduler"
+    depends_on:
+      - postgres
+    command: standalone
+
