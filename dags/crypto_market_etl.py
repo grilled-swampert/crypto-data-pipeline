@@ -21,16 +21,17 @@ COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
 POSTGRES_CONN_ID = "postgres_default"
 RAW_DATA_PATH = "/opt/airflow/data/raw"
 PROCESSED_DATA_PATH = "/opt/airflow/data/processed"
+CRYPTO_API_KEY = os.environ.get('CRYPTO_API_KEY')
 
 default_args = {
     'owner': 'data-engineering',
     'depends_on_past': False,
     'start_date': datetime(2024, 1, 1),
+    'catchup': False,
     'email_on_failure': True,
     'email_on_retry': False,
     'retries': 3,
     'retry_delay': timedelta(minutes=5),
-    'catchup': False
 }
 
 dag = DAG(
@@ -59,10 +60,14 @@ def extract_market_data(**context) -> str:
             'per_page': 50,
             'page': 1,
             'sparkline': False,
-            'price_change_percentage': '1h, 24h, 7d. 30d'
+            'price_change_percentage': '1h, 24h, 7d, 30d'
+        }
+        headers = {
+            "accept": "application/json",
+            "x-cg-pro-api-key": CRYPTO_API_KEY   
         }
 
-        response = requests.get(endpoint, params=params, timeout=30)
+        response = requests.get(endpoint, params=params, headers=headers, timeout=30)
         response.raise_for_status()
 
         market_data = response.json()
@@ -77,7 +82,7 @@ def extract_market_data(**context) -> str:
         raw_path = Path(RAW_DATA_PATH)
         raw_path.mkdir(parents=True, exist_ok=True)
 
-        filename = f"coingecko_market_data_{timestamp_str}.json
+        filename = f"coingecko_market_data_{timestamp_str}.json"
         filepath = raw_path / filename
 
         with open(filepath, 'w') as f:
@@ -97,4 +102,8 @@ def extract_market_data(**context) -> str:
         logging.error(f"Unexpected error during extraction: {e}")
         raise
 
-def load_raw
+extract_data = PythonOperator(
+    task_id='extract_market_data',
+    python_callable=extract_market_data,
+    dag=dag
+)
