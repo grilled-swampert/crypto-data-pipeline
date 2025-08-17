@@ -43,6 +43,70 @@ dag = DAG(
     tags=['crypto', 'etl', 'coingecko']
 )
 
+create_tables_sql = """
+-- Raw data lake table
+CREATE TABLE IF NOT EXISTS raw_market_data (
+    id SERIAL PRIMARY KEY,
+    extraction_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    api_endpoint TEXT NOT NULL,
+    record_count INTEGER NOT NULL,
+    raw_json_data JSONB NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_extraction UNIQUE (extraction_timestamp)
+);
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_raw_market_data_extraction_timestamp 
+ON raw_market_data(extraction_timestamp);
+
+CREATE INDEX IF NOT EXISTS idx_raw_market_data_created_at 
+ON raw_market_data(created_at);
+
+-- Curated market data table (for final processed data)
+CREATE TABLE IF NOT EXISTS curated_market_data (
+    id TEXT PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    name TEXT NOT NULL,
+    current_price DECIMAL(20,8),
+    market_cap BIGINT,
+    market_cap_rank INTEGER,
+    fully_diluted_valuation BIGINT,
+    total_volume DECIMAL(20,8),
+    high_24h DECIMAL(20,8),
+    low_24h DECIMAL(20,8),
+    price_change_24h DECIMAL(20,8),
+    price_change_percentage_24h DECIMAL(10,4),
+    price_change_percentage_1h DECIMAL(10,4),
+    price_change_percentage_7d DECIMAL(10,4),
+    price_change_percentage_30d DECIMAL(10,4),
+    market_cap_change_24h BIGINT,
+    market_cap_change_percentage_24h DECIMAL(10,4),
+    circulating_supply DECIMAL(20,8),
+    total_supply DECIMAL(20,8),
+    max_supply DECIMAL(20,8),
+    ath DECIMAL(20,8),
+    ath_change_percentage DECIMAL(10,4),
+    ath_date TIMESTAMP WITH TIME ZONE,
+    atl DECIMAL(20,8),
+    atl_change_percentage DECIMAL(10,4),
+    atl_date TIMESTAMP WITH TIME ZONE,
+    last_updated TIMESTAMP WITH TIME ZONE,
+    extraction_timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+    partition_date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Partitioning for better performance (PostgreSQL 10+)
+-- Note: In production, consider using native partitioning
+CREATE INDEX IF NOT EXISTS idx_curated_market_data_partition_date 
+ON curated_market_data(partition_date);
+
+CREATE INDEX IF NOT EXISTS idx_curated_market_data_symbol 
+ON curated_market_data(symbol);
+
+CREATE INDEX IF NOT EXISTS idx_curated_market_data_market_cap_rank 
+ON curated_market_data(market_cap_rank);
+"""
 
 def extract_market_data(**context) -> str:
     """
