@@ -13,20 +13,34 @@ services:
       - "5432:5432"
 
   airflow:
-    image: apache/airflow:2.10.2
+    build: .
     container_name: crypto_dag-airflow-1
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - CRYPTO_API_KEY=${CRYPTO_API_KEY}
-      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-postgres
+      - _PIP_ADDITIONAL_REQUIREMENTS=apache-airflow-providers-apache-spark
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
+      - ./airflow_jars:/opt/airflow/jars
     ports:
       - "8080:8080"
     depends_on:
       - postgres
     command: standalone
 
+  spark-master:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+    ports:
+      - "7077:7077"
+      - "8081:8080"
+
+  spark-worker:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
