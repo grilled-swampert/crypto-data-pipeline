@@ -43,6 +43,7 @@ dag = DAG(
     tags=['crypto', 'etl', 'coingecko']
 )
 
+
 def extract_market_data(**context) -> str:
     """
     Extract top 50 cryptocurrency market data from CoinGecko API
@@ -101,6 +102,61 @@ def extract_market_data(**context) -> str:
     except Exception as e:
         logging.error(f"Unexpected error during extraction: {e}")
         raise
+
+def load_rawdata_to_postgres(**context):
+    """
+    Load raw JSON data to PostgreSQL data lake
+    """
+    filepath = context['task_instance'].xcom_pull(task_ids='extract_market_data')
+    execution_date = context['execution_date']
+    
+    logging.info(f"Loading raw data from {filepath} to PostgreSQL")
+    
+    try:
+        with open(filepath, 'r') as f:
+            data = json.load(f)
+
+        postgres_hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+
+        insert_query = """
+        INSERT INTO raw_market_data (
+            extraction_timestamp,
+            api_endpoint,
+            record_count,
+            raw_json_data,
+            created_at
+        ) VALUES (%s, %s, %s, %s, %s)
+        """
+
+        postgres_hook.run(
+            insert_query,
+            parameters=(
+                data['extraction_timestamp'],
+                data['api_endpoint'],
+                data['record_count'],
+                json.dumps(data['data']),
+                execution_date
+            )
+        )
+
+        logging.info(f"Raw data loaded successfully for {execution_date}")
+        
+        return {
+            'extraction_timestamp': data['extraction_timestamp'],
+            'record_count': data['record_count'],
+            'filepath': filepath
+        }
+        
+    except Exception as e:
+        logging.error(f"Failed to load raw data to PostgreSQL: {e}")
+        raise
+
+create_tables = PostgresOperator(
+    task_id='create_tables',
+    postgres_conn_id=POSTGRES_CONN_ID,
+    sql=create_tables_sql,
+    dag=dag
+)
 
 extract_data = PythonOperator(
     task_id='extract_market_data',
