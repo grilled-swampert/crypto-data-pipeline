@@ -1,0 +1,14 @@
+version: '1'
+services:
+  airflow:
+    image: apache/airflow:2.10.2
+    restart: always
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=True
+      - _PIP_ADDITIONAL_REQUIREMENTS=
+    volumes:
+      - ./dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com && airflow webserver & airflow scheduler"
