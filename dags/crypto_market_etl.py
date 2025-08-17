@@ -215,6 +215,28 @@ def load_rawdata_to_postgres(**context):
         logging.error(f"Failed to load raw data to PostgreSQL: {e}")
         raise
 
+def submit_spark_transformation(**context):
+    """
+    Submit PySpark job for data transformation
+    """
+    metadata = context['task_instance'].xcom_pull(task_ids='load_raw_to_postgres')
+    execution_date = context['execution_date']
+    
+    logging.info("Preparing Spark transformation job")
+    
+    processed_path = Path(PROCESSED_DATA_PATH)
+    processed_path.mkdir(parents=True, exist_ok=True)
+    
+    spark_params = {
+        'extraction_timestamp': metadata['extraction_timestamp'],
+        'execution_date': execution_date.isoformat(),
+        'output_path': str(processed_path)
+    }
+    
+    context['task_instance'].xcom_push(key='spark_params', value=spark_params)
+    
+    return spark_params
+
 create_tables = PostgresOperator(
     task_id='create_tables',
     postgres_conn_id=POSTGRES_CONN_ID,
