@@ -249,3 +249,15 @@ extract_data = PythonOperator(
     python_callable=extract_market_data,
     dag=dag
 )
+
+load_raw_data = PythonOperator(
+    task_id='load_raw_to_postgres',
+    python_callable=load_rawdata_to_postgres,
+    dag=dag
+)
+
+prepare_spark_job = PythonOperator(
+    task_id='prepare_spark_transformation',
+    python_callable=submit_spark_transformation,
+    dag=dag
+)
