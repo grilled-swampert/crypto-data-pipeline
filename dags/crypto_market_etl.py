@@ -261,3 +261,67 @@ prepare_spark_job = PythonOperator(
     python_callable=submit_spark_transformation,
     dag=dag
 )
+
+def data_quality_checks(**context):
+    """
+    Perform basic data quality checks on processed data
+    """
+    logging.info("Starting data quality checks")
+    
+    try:
+        postgres_hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+        
+        count_query = """
+        SELECT COUNT(*) as record_count
+        FROM curated_market_data 
+        WHERE extraction_timestamp = %s
+        """
+        
+        extraction_timestamp = context['task_instance'].xcom_pull(
+            task_ids='prepare_spark_transformation',
+            key='spark_params'
+        )['extraction_timestamp']
+        
+        result = postgres_hook.get_first(count_query, parameters=(extraction_timestamp,))
+        record_count = result[0] if result else 0
+        
+        if record_count == 0:
+            raise ValueError("No records found in curated data")
+        
+        if record_count < 45:  
+            logging.warning(f"Lower than expected record count: {record_count}")
+        
+        # Check 2: Data completeness for top coins
+        completeness_query = """
+        SELECT 
+            COUNT(*) as total_records,
+            COUNT(current_price) as price_records,
+            COUNT(market_cap) as market_cap_records
+        FROM curated_market_data 
+        WHERE extraction_timestamp = %s
+        """
+        
+        result = postgres_hook.get_first(completeness_query, parameters=(extraction_timestamp,))
+        if result:
+            total, price_records, market_cap_records = result
+            price_completeness = (price_records / total) * 100 if total > 0 else 0
+            market_cap_completeness = (market_cap_records / total) * 100 if total > 0 else 0
+            
+            logging.info(f"Data completeness - Price: {price_completeness:.1f}%, Market Cap: {market_cap_completeness:.1f}%")
+            
+            if price_completeness < 95:
+                raise ValueError(f"Price data completeness too low: {price_completeness:.1f}%")
+        
+        logging.info("Data quality checks passed successfully")
+        
+    except Exception as e:
+        logging.error(f"Data quality checks failed: {e}")
+        raise
+
+quality_checks = PythonOperator(
+    task_id='data_quality_checks',
+    python_callable=data_quality_checks,
+    dag=dag
+)
+
+extract_data >> load_raw_data >> prepare_spark_job >> quality_checks
